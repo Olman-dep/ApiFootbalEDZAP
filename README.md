@@ -1313,3 +1313,36 @@ Analizar el mercado
 ```
 
 El sistema deberá estar preparado para evolucionar posteriormente hacia una plataforma deportiva de analítica avanzada, incorporando nuevos modelos, competiciones, mercados, proveedores de datos y servicios B2B.
+
+# 🔌 Especificación de API REST - Plataforma de Pronósticos Deportivos
+
+**Base URL:** `/api/v1`  
+**Autenticación:** Bearer Token (JWT)  
+**Content-Type:** `application/json`
+
+---
+
+## 🔐 1. Autenticación (`/auth`)
+
+Módulo encargado de la gestión de identidades, tokens y sesiones de usuario.
+
+| Método | Endpoint | Descripción | Requiere Auth |
+| :--- | :--- | :--- | :---: |
+| `POST` | `/auth/register` | Crea un nuevo usuario con rol `USER`. | ❌ |
+| `POST` | `/auth/login` | Autentica al usuario y devuelve un access & refresh token. | ❌ |
+| `POST` | `/auth/refresh` | Genera un nuevo access token usando el refresh token. | ❌ |
+| `GET` | `/auth/me` | Devuelve la información y perfil del usuario autenticado. | ✅ |
+
+**Ejemplo de respuesta (`POST /auth/login`):**
+```json
+{
+  "access_token": "eyJhbG...",
+  "refresh_token": "def502...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "user": {
+    "id": "64a7c...",
+    "email": "usuario@email.com",
+    "role": "PREMIUM"
+  }
+}
