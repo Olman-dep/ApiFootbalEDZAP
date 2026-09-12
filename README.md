@@ -1,12 +1,12 @@
 # ⚽ Backend — Plataforma de Pronósticos Deportivos con IA
 
-Documentación técnica del backend (FastAPI + MongoDB + motor Poisson/Monte Carlo) para la plataforma de analítica y pronósticos deportivos.
+Documentación técnica del backend (DJANGO + MongoDB + motor Poisson/Monte Carlo) para la plataforma de analítica y pronósticos deportivos.
 
 ---
 
 ## 1. Resumen
 
-Backend en **Python 3.12 / FastAPI** que expone una API REST para:
+Backend en **Python 3.12 / DJANGO** que expone una API REST para:
 
 - Consultar partidos, equipos y jugadores.
 - Generar pronósticos probabilísticos (goles, córners, tiros, tarjetas, player props) usando un motor **Poisson + Monte Carlo**.
@@ -22,7 +22,7 @@ Backend en **Python 3.12 / FastAPI** que expone una API REST para:
 | Tecnología | Uso |
 |---|---|
 | Python 3.12+ | Lenguaje principal |
-| FastAPI | Framework REST API |
+| Django | Framework REST API |
 | Pydantic / pydantic-settings | Validación y configuración |
 | Motor / PyMongo | Cliente MongoDB async |
 | NumPy / SciPy | Cálculo numérico y distribución de Poisson |
@@ -40,7 +40,7 @@ Backend en **Python 3.12 / FastAPI** que expone una API REST para:
 ```text
 backend/
 ├── app/
-│   ├── main.py                     # instancia FastAPI, routers, CORS, startup/shutdown
+│   ├── main.py                     # instancia DJANGO, routers, CORS, startup/shutdown
 │   ├── config/
 │   │   ├── settings.py             # variables de entorno (pydantic-settings)
 │   │   └── database.py             # conexión Mongo / fallback a modo mock
