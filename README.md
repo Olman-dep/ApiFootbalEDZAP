@@ -1,19 +1,19 @@
 # ⚽ Backend — Plataforma de Pronósticos Deportivos con IA
 
-Documentación técnica del backend (DJANGO + MongoDB + motor Poisson/Monte Carlo) para la plataforma de analítica y pronósticos deportivos.
+Backend en **Django + Django Ninja + MongoDB** (motor Poisson / Monte Carlo) para una plataforma de analítica y pronósticos deportivos.
+
+> ⚠️ Los pronósticos son estimaciones probabilísticas, no garantías de resultado.
 
 ---
 
 ## 1. Resumen
 
-Backend en **Python 3.12 / DJANGO** que expone una API REST para:
+Este backend expone una API REST para:
 
 - Consultar partidos, equipos y jugadores.
 - Generar pronósticos probabilísticos (goles, córners, tiros, tarjetas, player props) usando un motor **Poisson + Monte Carlo**.
 - Comparar las probabilidades del modelo contra cuotas de mercado y calcular **Expected Value (EV)**.
 - Gestionar usuarios, autenticación (JWT) y planes Free/Premium.
-
-> Los pronósticos son estimaciones probabilísticas, no garantías de resultado.
 
 ---
 
@@ -22,14 +22,18 @@ Backend en **Python 3.12 / DJANGO** que expone una API REST para:
 | Tecnología | Uso |
 |---|---|
 | Python 3.12+ | Lenguaje principal |
-| Django | Framework REST API |
-| Pydantic / pydantic-settings | Validación y configuración |
+| **Django** | Framework base (ORM de usuarios, migraciones, admin) |
+| **Django Ninja** | Capa de API REST — async nativo, schemas Pydantic, Swagger automático |
+| Pydantic / pydantic-settings | Validación de schemas y configuración |
 | Motor / PyMongo | Cliente MongoDB async |
 | NumPy / SciPy | Cálculo numérico y distribución de Poisson |
 | pandas | Procesamiento de datos |
 | scikit-learn / XGBoost | Modelos ML (fase posterior al MVP) |
-| python-jose / passlib(bcrypt) | JWT y hash de contraseñas |
+| python-jose / passlib (bcrypt) | JWT y hash de contraseñas |
 | pytest / pytest-asyncio / httpx | Testing |
+| uvicorn | Servidor ASGI (necesario para que el async funcione) |
+
+**¿Por qué Django Ninja y no Django REST Framework?** DRF tiene soporte async limitado y no combina bien con Motor (Mongo async). Ninja soporta `async def` de forma nativa, usa Pydantic para los schemas (igual que las entidades de este proyecto) y genera Swagger sin configuración extra — encaja directo con un stack basado en Mongo async.
 
 **Modo mock**: si `MONGODB_URI` no está configurada, el backend arranca con datos de ejemplo en memoria (equipos, jugadores, partidos, cuotas), para poder correr el MVP sin credenciales reales.
 
@@ -37,39 +41,43 @@ Backend en **Python 3.12 / DJANGO** que expone una API REST para:
 
 ## 3. Estructura de carpetas
 
-```text
+```
 backend/
+├── config/
+│   ├── settings.py                # settings de Django + configuración propia (pydantic-settings)
+│   ├── urls.py                    # conecta la API de Ninja al proyecto Django
+│   └── asgi.py                    # punto de entrada ASGI (requerido para async)
 ├── app/
-│   ├── main.py                     # instancia DJANGO, routers, CORS, startup/shutdown
+│   ├── api.py                     # instancia de NinjaAPI, routers, manejo de errores
 │   ├── config/
-│   │   ├── settings.py             # variables de entorno (pydantic-settings)
-│   │   └── database.py             # conexión Mongo / fallback a modo mock
+│   │   └── database.py            # conexión perezosa a Mongo (Motor) / fallback a modo mock
 │   ├── domain/
-│   │   ├── entities/                # User, Team, Player, Match, Prediction (Pydantic)
-│   │   └── repositories/            # interfaces (contratos) de repositorios
+│   │   ├── entities/               # User, Team, Player, Match, Prediction (Pydantic)
+│   │   └── repositories/           # interfaces (contratos) de repositorios
 │   ├── application/
-│   │   ├── services/                 # auth_service, match_service, prediction_service, odds_service
-│   │   └── use_cases/                 # generate_prediction, get_match_prediction, calculate_value
+│   │   ├── services/                # auth_service, match_service, prediction_service, odds_service
+│   │   └── use_cases/                # generate_prediction, get_match_prediction, calculate_value
 │   ├── infrastructure/
-│   │   ├── database/mongodb/         # implementación real de repositorios (Motor)
-│   │   ├── external/                 # mock_data.py + adaptadores a proveedores (API-Football, Odds API, Sportmonks)
+│   │   ├── database/mongodb/        # implementación real de repositorios (Motor)
+│   │   ├── external/                # mock_data.py + adaptadores (API-Football, Odds API, Sportmonks)
 │   │   └── ml/
-│   │       ├── poisson_model.py      # distribución de Poisson: lambda, P(exact), over/under, 1X2
-│   │       ├── monte_carlo.py        # simulación Monte Carlo de goles/córners/tiros/tarjetas
-│   │       └── prediction_engine.py  # orquesta Poisson + Monte Carlo + EV
+│   │       ├── poisson_model.py     # distribución de Poisson: lambda, P(exact), over/under, 1X2
+│   │       ├── monte_carlo.py       # simulación Monte Carlo de goles/córners/tiros/tarjetas
+│   │       └── prediction_engine.py # orquesta Poisson + Monte Carlo + EV
 │   ├── presentation/
-│   │   ├── routes/                   # auth, matches, predictions, players, odds
-│   │   └── schemas/                  # DTOs de request/response
+│   │   ├── routes/                  # routers de Ninja: auth, matches, predictions, players, odds
+│   │   └── schemas/                  # schemas Pydantic de request/response
 │   └── utils/
-│       ├── security.py               # JWT + hashing
+│       ├── security.py              # JWT + hashing
 │       ├── dates.py
 │       └── calculations.py
 ├── tests/
 ├── models/{trained,datasets}
 ├── scripts/
-│   ├── seed_data.py                  # carga datos de ejemplo en Mongo
+│   ├── seed_data.py                 # carga datos de ejemplo en Mongo
 │   ├── import_data.py
 │   └── train_models.py
+├── manage.py
 ├── requirements.txt
 ├── .env.example
 ├── Dockerfile
@@ -82,7 +90,7 @@ backend/
 
 ### 4.1 Paso 1 — Estimación de lambda (Poisson)
 
-```text
+```
 lambda = promedio( ataque_propio , debilidad_defensiva_rival ) * factor_localia
 ```
 
@@ -93,11 +101,11 @@ Se usa como línea base analítica para goles, córners y tarjetas, y para un c�
 En vez de asumir independencia perfecta entre eventos (goles, tiros, córners, tarjetas), el motor:
 
 1. Toma los lambdas estimados por Poisson para cada equipo/mercado.
-2. Simula **N partidos virtuales** (por defecto `MONTE_CARLO_SIMULATIONS=20000`) muestreando de distribuciones de Poisson correlacionadas (ej. más posesión y ataques peligrosos → más tiros y más córners).
+2. Simula N partidos virtuales (por defecto `MONTE_CARLO_SIMULATIONS=20000`) muestreando de distribuciones de Poisson correlacionadas (ej. más posesión y ataques peligrosos → más tiros y más córners).
 3. Cuenta la frecuencia de cada resultado (victoria/empate/derrota, over/under de goles, córners, tarjetas, tiros de jugador) sobre el total de simulaciones.
-4. Esa frecuencia relativa **es** la probabilidad estimada del evento.
+4. Esa frecuencia relativa es la probabilidad estimada del evento.
 
-```text
+```
 Datos (lambdas por mercado)
         ↓
 Generar N simulaciones de partido
@@ -111,12 +119,12 @@ Esto permite capturar mercados combinados (ej. "Liverpool gana Y over 2.5 goles"
 
 ### 4.3 Paso 3 — Expected Value (EV)
 
-```text
+```
 Probabilidad implícita = 1 / cuota
 EV = (Probabilidad_modelo × Cuota) - 1
 ```
 
-Si `EV > 0` se marca como **valor positivo**, sin presentarlo como garantía de ganancia.
+Si `EV > 0` se marca como valor positivo, sin presentarlo como garantía de ganancia.
 
 ### 4.4 Salida del motor
 
@@ -150,7 +158,7 @@ Si `EV > 0` se marca como **valor positivo**, sin presentarlo como garantía de 
 
 ## 5. Endpoints (MVP)
 
-```http
+```
 # Autenticación
 POST /api/v1/auth/register
 POST /api/v1/auth/login
@@ -173,16 +181,19 @@ GET  /api/v1/players/{player_id}/props   # tiros / tiros al arco esperados
 
 # Cuotas
 GET  /api/v1/odds/{match_id}
+
+# Sistema
+GET  /api/v1/health                      # estado del servicio y de la conexión a Mongo
 ```
 
 ---
 
 ## 6. Mercados incluidos en el MVP
 
-1. Resultado 1X2.
-2. Total de goles (over/under).
-3. Córners totales (over/under).
-4. Tiros / tiros al arco de jugadores (props).
+- Resultado 1X2.
+- Total de goles (over/under).
+- Córners totales (over/under).
+- Tiros / tiros al arco de jugadores (props).
 
 Tarjetas, props avanzados, alertas y notificaciones quedan para fases posteriores.
 
@@ -214,14 +225,32 @@ Si `MONGODB_URI` queda vacío, el backend usa datos de ejemplo en memoria (modo 
 
 ---
 
-## 8. Cómo correr el backend (cuando el código esté generado)
+## 8. Cómo correr el backend
 
 ```bash
 cd backend
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-uvicorn app.main:app --reload
+
+# Migraciones de Django (usuarios, sesiones, admin — no de Mongo)
+python manage.py migrate
+
+# Servidor ASGI (uvicorn, NO manage.py runserver, porque necesitamos async)
+uvicorn config.asgi:application --reload
 ```
 
-La documentación interactiva (Swagger) queda disponible en `http://localhost:8000/docs`.
+La documentación interactiva (Swagger, generada por Django Ninja) queda disponible en:
+
+```
+http://localhost:8000/api/v1/docs
+```
+
+---
+
+## 9. Notas de arquitectura
+
+- **Django** se encarga de lo que hace bien de fábrica: usuarios, autenticación, admin, migraciones — todo respaldado por una base relacional (Postgres/SQLite) vía su ORM habitual.
+- **Mongo (vía Motor)** se usa específicamente para los datos de dominio deportivo (partidos, equipos, jugadores, pronósticos, cuotas), donde el esquema flexible de documentos encaja mejor que filas rígidas.
+- El cliente de Motor se crea de forma **perezosa** (no en el arranque de Django), para evitar el error `Future attached to a different loop` que ocurre si Motor se inicializa fuera del event loop activo bajo ASGI.
+- El servidor **debe** correr sobre ASGI (`uvicorn`, `daphne` o similar). Con WSGI (`manage.py runserver` tradicional) las vistas `async def` no se ejecutan de forma asíncrona real.
