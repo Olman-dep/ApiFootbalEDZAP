@@ -1,1 +1,31 @@
+# Secretos y configuración local
+.env
+.env.*
+!.env.example
+
+# Entornos virtuales
 env/
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Modelos entrenados y datasets pesados
+models/trained/*
+models/datasets/*
+!models/trained/.gitkeep
+!models/datasets/.gitkeep
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

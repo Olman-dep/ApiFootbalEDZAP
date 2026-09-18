@@ -1,18 +1,27 @@
-MOCK_MATCHES = [
-    {
-        "id": "12345",
-        "home_team": "Real Madrid",
-        "away_team": "Barcelona",
-        "league": "LaLiga",
-        "status": "SCHEDULED"
-    },
-    {
-        "id": "67890",
-        "home_team": "Liverpool",
-        "away_team": "Manchester City",
-        "league": "Premier League",
-        "status": "SCHEDULED"
-    }
+from datetime import timedelta
+
+from dominio.entidades import EstadoPartido, Partido
+from dominio.entidades.base import ahora
+
+_base = ahora().replace(minute=0, second=0, microsecond=0)
+
+MOCK_PARTIDOS = [
+    Partido(
+        id="12345",
+        liga_id="laliga",
+        equipo_local_id="real-madrid",
+        equipo_visitante_id="barcelona",
+        fecha=_base + timedelta(hours=3),
+        estado=EstadoPartido.PROGRAMADO,
+    ),
+    Partido(
+        id="67890",
+        liga_id="premier-league",
+        equipo_local_id="liverpool",
+        equipo_visitante_id="manchester-city",
+        fecha=_base + timedelta(days=1),
+        estado=EstadoPartido.PROGRAMADO,
+    ),
 ]
 
 MOCK_PLAYERS = [
@@ -21,6 +30,6 @@ MOCK_PLAYERS = [
         "name": "Vinícius Jr.",
         "team": "Real Madrid",
         "position": "DEL",
-        "expected_shots": 3.2
+        "expected_shots": 3.2,
     }
 ]
