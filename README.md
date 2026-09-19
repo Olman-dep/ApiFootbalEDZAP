@@ -1,15 +1,7 @@
 ⚽ Backend — Plataforma de Pronósticos Deportivos con IA
-Backend en **FastAPI + MongoDB** (motor Poisson / Monte Carlo) para una plataforma de analítica y pronósticos deportivos, con ingesta de datos vía **scraping** y/o **API de fútbol**.
+Backend en **NestJS (TypeScript) + MongoDB** (motor Poisson / Monte Carlo) para una plataforma de analítica y pronósticos deportivos, con ingesta de datos vía **scraping** y/o **API de fútbol**. Gestionado con **pnpm**.
 
-<<<<<<< HEAD
-Backend en **Django + Django Ninja + MongoDB** (motor Poisson / Monte Carlo) para una plataforma de analítica y pronósticos deportivos.
-
-> ⚠️ Los pronósticos son estimaciones probabilísticas, no garantías de resultado.
-
----
-=======
 ⚠️ Los pronósticos son estimaciones probabilísticas, no garantías de resultado.
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
 
 ## 1. Resumen
 
@@ -19,51 +11,32 @@ Este backend expone una API REST para:
 - Generar pronósticos probabilísticos (goles, córners, tiros, tarjetas, player props) usando un motor Poisson + Monte Carlo.
 - Comparar las probabilidades del modelo contra cuotas de mercado y calcular Expected Value (EV).
 - Gestionar usuarios, autenticación (JWT) y planes Free/Premium.
-<<<<<<< HEAD
-
----
-=======
 - Alimentarse de datos deportivos obtenidos por **scraping** propio y/o por **APIs de terceros** (API-Football, Odds API, Sportmonks), seleccionables por configuración.
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
 
 ## 2. Stack
 
 | Tecnología | Uso |
 |---|---|
-| Python 3.12+ | Lenguaje principal |
-<<<<<<< HEAD
-| **Django** | Framework base (ORM de usuarios, migraciones, admin) |
-| **Django Ninja** | Capa de API REST — async nativo, schemas Pydantic, Swagger automático |
-| Pydantic / pydantic-settings | Validación de schemas y configuración |
-=======
-| **FastAPI** | Framework principal — async nativo, Pydantic v2, Swagger/OpenAPI automático |
-| Uvicorn | Servidor ASGI |
-| Pydantic v2 / pydantic-settings | Validación de schemas y configuración |
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
-| Motor / PyMongo | Cliente MongoDB async |
-| (opcional) Beanie | ODM async sobre Motor + Pydantic, si se prefiere no escribir repositorios a mano |
-| NumPy / SciPy | Cálculo numérico y distribución de Poisson |
-| pandas | Procesamiento de datos |
-| scikit-learn / XGBoost | Modelos ML (fase posterior al MVP) |
-<<<<<<< HEAD
-| python-jose / passlib (bcrypt) | JWT y hash de contraseñas |
-=======
-| python-jose / passlib[bcrypt] | JWT y hash de contraseñas |
-| httpx | Cliente HTTP async — consumo de APIs y scraping |
-| selectolax / BeautifulSoup4 | Parseo de HTML para scraping |
-| playwright (opcional) | Scraping de sitios con renderizado JS (SPA) |
-| APScheduler (o Celery + Redis) | Jobs periódicos de ingesta de datos (scraping/API) |
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
-| pytest / pytest-asyncio / httpx | Testing |
-| uvicorn | Servidor ASGI (necesario para que el async funcione) |
+| Node.js 20+ LTS | Runtime |
+| **NestJS** | Framework principal — arquitectura modular, DI, decorators, Swagger integrado |
+| TypeScript | Lenguaje principal |
+| **pnpm** | Gestor de paquetes |
+| @nestjs/mongoose (Mongoose) | ODM para MongoDB |
+| class-validator / class-transformer | Validación y transformación de DTOs |
+| @nestjs/config | Configuración vía variables de entorno |
+| @nestjs/passport + passport-jwt + bcrypt | Autenticación JWT |
+| @nestjs/swagger | Documentación OpenAPI/Swagger automática |
+| @nestjs/schedule | Cron jobs simples de ingesta |
+| @nestjs/bullmq + Redis | Cola de jobs para ingesta con reintentos/backoff (recomendado en producción) |
+| axios (o undici) | Llamadas HTTP a APIs de fútbol |
+| cheerio | Parseo HTML para scraping estático |
+| playwright | Scraping de sitios con renderizado JS (SPA) |
+| jstat (o implementación propia) | Distribución de Poisson — Node no trae equivalente a NumPy/SciPy |
+| jest + supertest | Testing |
 
-**¿Por qué Django Ninja y no Django REST Framework?** DRF tiene soporte async limitado y no combina bien con Motor (Mongo async). Ninja soporta `async def` de forma nativa, usa Pydantic para los schemas (igual que las entidades de este proyecto) y genera Swagger sin configuración extra — encaja directo con un stack basado en Mongo async.
+### ¿Por qué NestJS?
 
-### ¿Por qué FastAPI y no Django + Django Ninja?
-
-Todo el dominio del proyecto vive en MongoDB (partidos, equipos, cuotas, pronósticos) y no hay necesidad real del ORM relacional, el admin ni las migraciones de Django — solo se usaban para el modelo de usuarios. FastAPI da lo mismo que se buscaba con Ninja (async nativo, schemas Pydantic, Swagger automático) sin cargar con una segunda base de datos relacional ni con un framework completo por encima. Los usuarios y la autenticación se resuelven directamente contra Mongo, igual que el resto del dominio, lo que simplifica infraestructura y despliegue.
-
-Si en algún momento se necesita algo estrictamente relacional (facturación, suscripciones con integridad transaccional fuerte), se puede sumar SQLAlchemy async + Postgres solo para ese módulo, sin tocar el resto.
+NestJS aporta justo lo que este proyecto necesita sin depender de Python: arquitectura modular con inyección de dependencias (encaja natural con el patrón domain/application/infrastructure que ya tenías), DTOs validados con decorators, Swagger generado automáticamente, y un sistema de *providers* propio de Nest que resuelve muy bien el patrón "elegir entre scraping o API según configuración" (ver sección 4). Todo el dominio sigue viviendo en MongoDB vía Mongoose, sin necesidad de una base relacional aparte.
 
 **Modo mock:** si `MONGODB_URI` no está configurada, el backend arranca con datos de ejemplo en memoria (equipos, jugadores, partidos, cuotas), para poder correr el MVP sin credenciales reales.
 
@@ -71,121 +44,116 @@ Si en algún momento se necesita algo estrictamente relacional (facturación, su
 
 ```
 backend/
-├── config/
-│   ├── settings.py                # settings de Django + configuración propia (pydantic-settings)
-│   ├── urls.py                    # conecta la API de Ninja al proyecto Django
-│   └── asgi.py                    # punto de entrada ASGI (requerido para async)
-├── app/
-<<<<<<< HEAD
-│   ├── api.py                     # instancia de NinjaAPI, routers, manejo de errores
+├── src/
+│   ├── main.ts                       # bootstrap de Nest, Swagger, pipes globales
+│   ├── app.module.ts
 │   ├── config/
-│   │   └── database.py            # conexión perezosa a Mongo (Motor) / fallback a modo mock
+│   │   └── configuration.ts          # config vía @nestjs/config
+│   ├── common/
+│   │   ├── guards/                   # jwt-auth.guard.ts
+│   │   ├── decorators/                # @CurrentUser(), etc.
+│   │   └── filters/                   # exception filters globales
+│   ├── modules/
+│   │   ├── auth/
+│   │   │   ├── auth.module.ts
+│   │   │   ├── auth.controller.ts
+│   │   │   ├── auth.service.ts
+│   │   │   ├── strategies/            # jwt.strategy.ts, local.strategy.ts
+│   │   │   └── dto/
+│   │   ├── matches/
+│   │   │   ├── matches.module.ts
+│   │   │   ├── matches.controller.ts
+│   │   │   ├── matches.service.ts
+│   │   │   └── dto/
+│   │   ├── predictions/
+│   │   │   ├── predictions.module.ts
+│   │   │   ├── predictions.controller.ts
+│   │   │   ├── predictions.service.ts
+│   │   │   └── dto/
+│   │   ├── players/
+│   │   ├── odds/
+│   │   └── ingest/                    # dispara refresco manual de datos
 │   ├── domain/
-│   │   ├── entities/               # User, Team, Player, Match, Prediction (Pydantic)
-│   │   └── repositories/           # interfaces (contratos) de repositorios
-│   ├── application/
-│   │   ├── services/                # auth_service, match_service, prediction_service, odds_service
-│   │   └── use_cases/                # generate_prediction, get_match_prediction, calculate_value
+│   │   └── schemas/                   # Mongoose schemas: User, Team, Player, Match, Prediction, Odds
 │   ├── infrastructure/
-│   │   ├── database/mongodb/        # implementación real de repositorios (Motor)
-│   │   ├── external/                # mock_data.py + adaptadores (API-Football, Odds API, Sportmonks)
-=======
-│   ├── main.py                       # instancia FastAPI, routers, middlewares, lifespan
-│   ├── core/
-│   │   ├── config.py                 # settings (pydantic-settings)
-│   │   ├── security.py               # JWT + hashing
-│   │   └── database.py               # conexión Motor, gestionada en el lifespan
-│   ├── domain/
-│   │   ├── entities/                 # User, Team, Player, Match, Prediction (Pydantic)
-│   │   └── repositories/             # interfaces (contratos) de repositorios
-│   ├── application/
-│   │   ├── services/                 # auth_service, match_service, prediction_service, odds_service
-│   │   └── use_cases/                # generate_prediction, get_match_prediction, calculate_value
-│   ├── infrastructure/
-│   │   ├── database/mongodb/         # implementación real de repositorios (Motor)
-│   │   ├── external/
-│   │   │   ├── providers/            # ApiFootballProvider, OddsApiProvider, SportmonksProvider
-│   │   │   ├── scraping/             # scrapers por fuente (httpx + selectolax / playwright)
-│   │   │   ├── data_source_factory.py# elige provider según DATA_SOURCE (api | scraping | mock)
-│   │   │   └── mock_data.py
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
-│   │   └── ml/
-│   │       ├── poisson_model.py     # distribución de Poisson: lambda, P(exact), over/under, 1X2
-│   │       ├── monte_carlo.py       # simulación Monte Carlo de goles/córners/tiros/tarjetas
-│   │       └── prediction_engine.py # orquesta Poisson + Monte Carlo + EV
-│   ├── presentation/
-<<<<<<< HEAD
-│   │   ├── routes/                  # routers de Ninja: auth, matches, predictions, players, odds
-│   │   └── schemas/                  # schemas Pydantic de request/response
-│   └── utils/
-│       ├── security.py              # JWT + hashing
-│       ├── dates.py
-│       └── calculations.py
-=======
-│   │   ├── routes/                   # APIRouter por dominio: auth, matches, predictions, players, odds
-│   │   ├── schemas/                  # schemas Pydantic de request/response
-│   │   └── dependencies.py           # Depends(): auth actual, conexión a db, etc.
+│   │   ├── providers/                 # ApiFootballProvider, OddsApiProvider, SportmonksProvider
+│   │   ├── scraping/                  # scrapers con cheerio / playwright
+│   │   ├── data-source.provider.ts    # factory provider de Nest: elige según DATA_SOURCE
+│   │   └── mock/
+│   │       └── mock-data.ts
+│   ├── ml/
+│   │   ├── poisson.service.ts         # lambda, P(exacto), over/under, 1X2
+│   │   ├── monte-carlo.service.ts     # simulación de goles/córners/tiros/tarjetas
+│   │   └── prediction-engine.service.ts
 │   └── jobs/
-│       └── scheduler.py              # APScheduler: refresca datos periódicamente (ingesta desacoplada)
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
-├── tests/
+│       └── ingest.processor.ts        # cron (@nestjs/schedule) o worker (BullMQ) de ingesta periódica
+├── test/
 ├── models/{trained,datasets}
 ├── scripts/
-│   ├── seed_data.py                 # carga datos de ejemplo en Mongo
-│   ├── import_data.py
-│   └── train_models.py
-├── manage.py
-├── requirements.txt
+│   ├── seed-data.ts                   # carga datos de ejemplo en Mongo
+│   ├── import-data.ts
+│   └── train-models.ts
 ├── .env.example
 ├── Dockerfile
+├── nest-cli.json
+├── tsconfig.json
+├── package.json
+├── pnpm-lock.yaml
 └── README.md
 ```
 
 ## 4. Fuentes de datos: scraping y/o API de fútbol
 
-El dato deportivo (partidos, alineaciones, estadísticas, cuotas) puede venir de dos orígenes intercambiables, definidos por un patrón *Provider* (Strategy):
+El dato deportivo (partidos, alineaciones, estadísticas, cuotas) puede venir de dos orígenes intercambiables, definidos por una interfaz común y resueltos con el sistema de *providers* de Nest (inyección de dependencias, no si/else desperdigados por el código):
 
-```python
-# app/infrastructure/external/providers/base.py
-from typing import Protocol
-
-<<<<<<< HEAD
-=======
-class MatchDataProvider(Protocol):
-    async def get_today_matches(self) -> list[dict]: ...
-    async def get_match_stats(self, match_id: str) -> dict: ...
-    async def get_odds(self, match_id: str) -> dict: ...
+```typescript
+// src/infrastructure/providers/match-data-provider.interface.ts
+export interface MatchDataProvider {
+  getTodayMatches(): Promise<MatchDto[]>;
+  getMatchStats(matchId: string): Promise<MatchStatsDto>;
+  getOdds(matchId: string): Promise<OddsDto>;
+}
 ```
 
 Implementaciones posibles:
 
-- **`ApiFootballProvider` / `OddsApiProvider` / `SportmonksProvider`** — consumen la API oficial correspondiente vía `httpx`. Es la opción más estable y con menos mantenimiento; recomendada como fuente principal, sobre todo para **cuotas de mercado** (dato sensible a cambios de estructura de la página si se scrapea).
-- **`ScrapingProvider`** — obtiene datos de sitios públicos con `httpx` + `selectolax`/`BeautifulSoup4` para HTML estático, o `playwright` si el sitio renderiza con JS. Útil para complementar datos que la API no cubre (ej. estadísticas avanzadas, lesiones) o como fuente principal si no hay presupuesto para una API paga.
+- **`ApiFootballProvider` / `OddsApiProvider` / `SportmonksProvider`** — consumen la API oficial correspondiente vía `axios`. Es la opción más estable y con menos mantenimiento; recomendada como fuente principal, sobre todo para **cuotas de mercado** (dato muy sensible a cambios de estructura de la página si se scrapea).
+- **`ScrapingProvider`** — obtiene datos de sitios públicos con `cheerio` para HTML estático, o `playwright` si el sitio renderiza con JS. Útil para complementar datos que la API no cubre (ej. estadísticas avanzadas, lesiones) o como fuente principal si no hay presupuesto para una API paga.
 - **`MockProvider`** — datos de ejemplo en memoria, igual que antes, para desarrollo sin credenciales.
 
-La fuente activa se elige por configuración, sin tocar el resto del código:
+La fuente activa se elige por variable de entorno, resuelta con un *factory provider* de Nest:
 
 ```
 DATA_SOURCE=api_football   # api_football | scraping | mock
 ```
 
-```python
-# app/infrastructure/external/data_source_factory.py
-def get_provider(settings) -> MatchDataProvider:
-    if settings.DATA_SOURCE == "api_football":
-        return ApiFootballProvider(api_key=settings.FOOTBALL_API_KEY)
-    if settings.DATA_SOURCE == "scraping":
-        return ScrapingProvider()
-    return MockProvider()
+```typescript
+// src/infrastructure/data-source.provider.ts
+export const MatchDataProviderFactory: Provider = {
+  provide: 'MATCH_DATA_PROVIDER',
+  useFactory: (config: ConfigService): MatchDataProvider => {
+    switch (config.get<string>('DATA_SOURCE')) {
+      case 'api_football':
+        return new ApiFootballProvider(config.get('FOOTBALL_API_KEY'));
+      case 'scraping':
+        return new ScrapingProvider();
+      default:
+        return new MockProvider();
+    }
+  },
+  inject: [ConfigService],
+};
 ```
+
+Cualquier servicio que necesite datos deportivos inyecta `@Inject('MATCH_DATA_PROVIDER') private provider: MatchDataProvider`, sin saber si por debajo hay scraping o una API.
 
 ### Ingesta desacoplada del request (importante)
 
 Scrapear o llamar a una API externa **dentro** del request del usuario es frágil y lento (si la fuente cae o tarda, tu API cae o tarda con ella). El patrón correcto:
 
-1. Un **job periódico** (`app/jobs/scheduler.py`, con APScheduler o Celery + Redis si se necesita escalar a varios workers) corre el provider activo cada N minutos, normaliza los datos al esquema propio (`Match`, `Team`, `Odds`, etc.) y los persiste en Mongo.
+1. Un **job periódico** corre el provider activo cada N minutos, normaliza los datos al esquema propio (`Match`, `Team`, `Odds`, etc.) y los persiste en Mongo. Para algo simple, `@nestjs/schedule` con un `@Cron()` alcanza; si necesitás reintentos, backoff y varios workers en paralelo, usá `@nestjs/bullmq` con Redis.
 2. Los **endpoints de la API siempre leen de Mongo** (nunca scrapean ni llaman a la API externa en tiempo real dentro de un request). Esto da velocidad constante y aísla al usuario de fallos de la fuente.
-3. Si un endpoint necesita un dato que aún no fue ingerido, se dispara la ingesta puntual de ese partido en background (`BackgroundTasks` de FastAPI), respondiendo igual con lo último disponible en caché mientras se actualiza.
+3. Si un endpoint necesita un dato que todavía no fue ingerido, se dispara la ingesta puntual de ese partido en background y se responde igual con lo último disponible en caché mientras se actualiza.
 
 Notas prácticas sobre scraping:
 
@@ -197,7 +165,6 @@ Notas prácticas sobre scraping:
 
 ### 5.1 Paso 1 — Estimación de lambda (Poisson)
 
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
 ```
 lambda = promedio( ataque_propio , debilidad_defensiva_rival ) * factor_localia
 ```
@@ -223,6 +190,8 @@ Contar frecuencia de cada resultado
 Probabilidad = frecuencia / N simulaciones
 ```
 
+Node no trae un equivalente directo a NumPy/SciPy: `poisson.service.ts` implementa el muestreo con el algoritmo de Knuth (simple con `Math.random()`) o usando `jstat` para la PMF exacta cuando se necesita el cálculo analítico en vez de simulado.
+
 Esto permite capturar mercados combinados (ej. "Liverpool gana Y over 2.5 goles") que el modelo analítico puro no resuelve fácilmente.
 
 ### 5.3 Paso 3 — Expected Value (EV)
@@ -238,13 +207,13 @@ Si `EV > 0` se marca como valor positivo, sin presentarlo como garantía de gana
 
 ```json
 {
-  "match_id": "12345",
-  "simulations_run": 20000,
+  "matchId": "12345",
+  "simulationsRun": 20000,
   "lambdas": {
-    "home_goals": 1.8,
-    "away_goals": 1.1,
-    "home_corners": 5.4,
-    "away_corners": 4.1
+    "homeGoals": 1.8,
+    "awayGoals": 1.1,
+    "homeCorners": 5.4,
+    "awayCorners": 4.1
   },
   "markets": [
     {
@@ -253,9 +222,9 @@ Si `EV > 0` se marca como valor positivo, sin presentarlo como garantía de gana
       "probability": 0.68,
       "confidence": 0.74,
       "odds": 1.85,
-      "implied_probability": 0.54,
-      "expected_value": 0.258,
-      "is_value_bet": true
+      "impliedProbability": 0.54,
+      "expectedValue": 0.258,
+      "isValueBet": true
     }
   ],
   "model": { "name": "poisson_monte_carlo", "version": "1.0.0" }
@@ -264,11 +233,6 @@ Si `EV > 0` se marca como valor positivo, sin presentarlo como garantía de gana
 
 ## 6. Endpoints (MVP)
 
-<<<<<<< HEAD
-## 5. Endpoints (MVP)
-
-=======
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
 ```
 # Autenticación
 POST /api/v1/auth/register
@@ -279,39 +243,29 @@ GET  /api/v1/auth/me
 # Partidos
 GET  /api/v1/matches
 GET  /api/v1/matches/today
-GET  /api/v1/matches/{match_id}
+GET  /api/v1/matches/:matchId
 
 # Predicciones
-GET  /api/v1/predictions/{match_id}      # recupera Poisson + Monte Carlo + EV (desde Mongo)
+GET  /api/v1/predictions/:matchId        # recupera Poisson + Monte Carlo + EV (desde Mongo)
 GET  /api/v1/predictions/value           # solo mercados con EV positivo
 GET  /api/v1/predictions/history
 
 # Jugadores
-GET  /api/v1/players/{player_id}
-GET  /api/v1/players/{player_id}/props   # tiros / tiros al arco esperados
+GET  /api/v1/players/:playerId
+GET  /api/v1/players/:playerId/props     # tiros / tiros al arco esperados
 
 # Cuotas
-GET  /api/v1/odds/{match_id}
+GET  /api/v1/odds/:matchId
 
-<<<<<<< HEAD
-# Sistema
-GET  /api/v1/health                      # estado del servicio y de la conexión a Mongo
-=======
 # Ingesta (uso interno/admin)
-POST /api/v1/admin/ingest/{match_id}     # dispara refresco puntual (BackgroundTasks)
+POST /api/v1/admin/ingest/:matchId       # dispara refresco puntual
 
 # Sistema
 GET  /api/v1/health                      # estado del servicio, conexión a Mongo y último ingest exitoso
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
 ```
 
 ## 7. Mercados incluidos en el MVP
 
-<<<<<<< HEAD
-## 6. Mercados incluidos en el MVP
-
-=======
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
 - Resultado 1X2.
 - Total de goles (over/under).
 - Córners totales (over/under).
@@ -326,9 +280,8 @@ MONGODB_URI=
 DATABASE_NAME=sports_predictions
 
 JWT_SECRET=
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-REFRESH_TOKEN_EXPIRE_DAYS=7
+JWT_EXPIRES_IN=1h
+JWT_REFRESH_EXPIRES_IN=7d
 
 DATA_SOURCE=mock                # mock | api_football | scraping
 FOOTBALL_API_KEY=
@@ -337,68 +290,48 @@ SPORTMONKS_API_KEY=
 SCRAPING_USER_AGENT=sports-predictions-bot/1.0
 INGEST_INTERVAL_MINUTES=15
 
+REDIS_URL=                      # solo si se usa @nestjs/bullmq para la cola de ingesta
+
 MONTE_CARLO_SIMULATIONS=20000
 RANDOM_SEED=42
 
-ENVIRONMENT=development
-CORS_ORIGINS=*
+NODE_ENV=development
+PORT=3000
+CORS_ORIGIN=*
 ```
 
 Si `MONGODB_URI` queda vacío, el backend usa datos de ejemplo en memoria (modo mock) para poder ejecutarse sin infraestructura externa.
 
-<<<<<<< HEAD
----
-
-## 8. Cómo correr el backend
-=======
 ## 9. Cómo correr el backend
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
 
 ```bash
 cd backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+pnpm install
 cp .env.example .env
 
-<<<<<<< HEAD
-# Migraciones de Django (usuarios, sesiones, admin — no de Mongo)
-python manage.py migrate
-
-# Servidor ASGI (uvicorn, NO manage.py runserver, porque necesitamos async)
-uvicorn config.asgi:application --reload
+pnpm start:dev
 ```
 
-La documentación interactiva (Swagger, generada por Django Ninja) queda disponible en:
+Otros scripts útiles:
 
-```
-http://localhost:8000/api/v1/docs
-```
-
----
-
-## 9. Notas de arquitectura
-
-- **Django** se encarga de lo que hace bien de fábrica: usuarios, autenticación, admin, migraciones — todo respaldado por una base relacional (Postgres/SQLite) vía su ORM habitual.
-- **Mongo (vía Motor)** se usa específicamente para los datos de dominio deportivo (partidos, equipos, jugadores, pronósticos, cuotas), donde el esquema flexible de documentos encaja mejor que filas rígidas.
-- El cliente de Motor se crea de forma **perezosa** (no en el arranque de Django), para evitar el error `Future attached to a different loop` que ocurre si Motor se inicializa fuera del event loop activo bajo ASGI.
-- El servidor **debe** correr sobre ASGI (`uvicorn`, `daphne` o similar). Con WSGI (`manage.py runserver` tradicional) las vistas `async def` no se ejecutan de forma asíncrona real.
-=======
-uvicorn app.main:app --reload
+```bash
+pnpm build          # compila a dist/
+pnpm start:prod      # corre la build compilada
+pnpm test            # unit tests (jest)
+pnpm test:e2e        # tests end-to-end (supertest)
+pnpm lint            # eslint
 ```
 
-La documentación interactiva (Swagger, generada automáticamente por FastAPI) queda disponible en:
+La documentación interactiva (Swagger, generada automáticamente por `@nestjs/swagger`) queda disponible en:
 
 ```
-http://localhost:8000/docs
+http://localhost:3000/api/docs
 ```
-
-y el esquema OpenAPI crudo en `http://localhost:8000/openapi.json`.
 
 ## 10. Notas de arquitectura
 
-- Todo el dominio (usuarios, partidos, equipos, jugadores, pronósticos, cuotas) vive en MongoDB vía Motor; no hay una segunda base de datos relacional salvo que se agregue explícitamente para un módulo que la necesite (ej. facturación).
-- El cliente de Motor se crea en el `lifespan` de FastAPI (no como variable global al importar el módulo), para evitar problemas de *event loop* al correr bajo ASGI y para poder cerrarlo limpiamente al apagar el servidor.
+- Todo el dominio (usuarios, partidos, equipos, jugadores, pronósticos, cuotas) vive en MongoDB vía Mongoose; no hay una base relacional salvo que se agregue explícitamente para un módulo que la necesite (ej. facturación).
+- La conexión a Mongo se gestiona con `@nestjs/mongoose` en `app.module.ts` (`MongooseModule.forRootAsync`), leyendo la URI desde `ConfigService`.
 - La ingesta de datos (scraping y/o API de fútbol) está desacoplada del ciclo request/response: corre en jobs periódicos y deja los datos listos en Mongo; los endpoints solo leen. Esto hace que la API responda rápido y no dependa de la disponibilidad de la fuente externa en cada request.
-- El motor de predicción (Poisson + Monte Carlo) es indiferente al origen del dato: solo necesita los `lambdas` normalizados, así que cambiar de proveedor de datos (o combinar varios) no afecta al `prediction_engine.py`.
-- El servidor corre sobre Uvicorn (u otro servidor ASGI); no requiere `manage.py` ni ningún comando de migración, ya que no hay ORM relacional en el MVP.
->>>>>>> e6b654e25911bfd4a5756a9dd7cc35048b3c208c
+- El motor de predicción (Poisson + Monte Carlo) es indiferente al origen del dato: solo necesita los `lambdas` normalizados, así que cambiar de proveedor de datos (o combinar varios) no afecta a `prediction-engine.service.ts`.
+- Los DTOs con `class-validator` validan automáticamente cada request gracias al `ValidationPipe` global configurado en `main.ts`; no hace falta validar a mano en cada controller.
