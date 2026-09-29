@@ -6,5 +6,7 @@ import { MatchDataProviderFactory } from '../../infrastructure/data-source.provi
 @Module({
   controllers: [MatchesController],
   providers: [MatchesService, MatchDataProviderFactory],
+  exports: [MatchesService],
 })
 export class MatchesModule {}
+
