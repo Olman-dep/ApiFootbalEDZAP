@@ -26,6 +26,12 @@ export class PredictionsService {
       awayAvgGoals,
     );
 
-    return { match, probabilities };
+    const overUnder25 = this.poissonService.calculateOverUnder(
+      homeAvgGoals,
+      awayAvgGoals,
+      2.5,
+    );
+
+    return { match, probabilities, overUnder25 };
   }
 }

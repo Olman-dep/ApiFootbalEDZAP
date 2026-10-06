@@ -4,7 +4,10 @@ function factorial(n: number): number {
   return n <= 1 ? 1 : n * factorial(n - 1);
 }
 
-function poissonProbability(observedGoals: number, averageGoals: number): number {
+function poissonProbability(
+  observedGoals: number,
+  averageGoals: number,
+): number {
   return (
     (Math.pow(averageGoals, observedGoals) * Math.exp(-averageGoals)) /
     factorial(observedGoals)
@@ -21,7 +24,10 @@ const MAX_GOALS = 6;
 
 @Injectable()
 export class PoissonService {
-  calculateMatchProbabilities(homeAvgGoals: number, awayAvgGoals: number): MatchProbabilities {
+  calculateMatchProbabilities(
+    homeAvgGoals: number,
+    awayAvgGoals: number,
+  ): MatchProbabilities {
     let homeWin = 0;
     let draw = 0;
     let awayWin = 0;
@@ -39,5 +45,20 @@ export class PoissonService {
     }
 
     return { homeWin, draw, awayWin };
+  }
+
+  calculateOverUnder(homeAvgGoals: number, awayAvgGoals: number, line: number) {
+    const totalAvgGoals = homeAvgGoals + awayAvgGoals;
+    let underProbability = 0;
+
+    for (let goals = 0; goals <= line; goals++) {
+      underProbability += poissonProbability(goals, totalAvgGoals);
+    }
+
+    return {
+      line,
+      over: 1 - underProbability,
+      under: underProbability,
+    };
   }
 }
