@@ -6,7 +6,7 @@ import { PlayersService } from '../../application/player.service.js';
 
 import { Player, PlayerSchema } from '../database/schemas/player.schema.js';
 import { Match, MatchSchema } from '../database/schemas/match.schema.js';
-import { Prediction, PredictionSchema } from '../database/schemas/prediction.schema';
+import { Prediction, PredictionSchema } from '../database/schemas/prediction.schema.js';
 
 @Module({
   imports: [

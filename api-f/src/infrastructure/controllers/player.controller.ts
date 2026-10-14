@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { PlayersService } from '../services/players.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
+import { PlayersService } from '../../application/player.service.js';
 
 @ApiTags('players')
 @Controller('players')
