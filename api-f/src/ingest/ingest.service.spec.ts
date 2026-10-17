@@ -1,8 +1,8 @@
 import { Types } from 'mongoose';
 import { IngestService } from './ingest.service.js';
-import type { ApiFootballClient } from './api-football.client.js';
-import { ApiFootballError } from './api-football.client.js';
-import { FIXTURES, STANDINGS } from './api-football.fixtures.js';
+import type { FootballDataClient } from './football-data.client.js';
+import { FootballDataError } from './football-data.client.js';
+import { MATCHES, STANDINGS } from './football-data.fixtures.js';
 
 // --- Modelo falso en memoria con lo mínimo que usa IngestService ---
 
@@ -75,26 +75,30 @@ class FakeModel {
 
 // --- Cliente falso ---
 
-function fakeClient(overrides: Partial<Record<'getFixtures' | 'getStandings', unknown>> = {}) {
+function fakeClient(overrides: Partial<Record<'getMatches' | 'getStandings', unknown>> = {}) {
   let requests = 0;
   return {
     get requestCount() {
       return requests;
     },
-    requestsRemainingToday: 90,
-    getFixtures: async (..._args: [number, number]) => {
+    requestsAvailableMinute: 8,
+    getMatches: async (..._args: [string, number | undefined]) => {
       requests++;
-      return FIXTURES;
+      return MATCHES;
     },
-    getStandings: async (..._args: [number, number]) => {
+    getStandings: async (..._args: [string, number | undefined]) => {
       requests++;
       return STANDINGS;
     },
     ...overrides,
-  } as unknown as ApiFootballClient;
+  } as unknown as FootballDataClient;
 }
 
-function setup(client: ApiFootballClient | null = fakeClient(), leagues = [128]) {
+function setup(
+  client: FootballDataClient | null = fakeClient(),
+  competitions = ['PD'],
+  season: number | null = 2026, // null = sin temporada configurada (la API usa la actual)
+) {
   const models = {
     competition: new FakeModel(),
     team: new FakeModel(),
@@ -108,7 +112,7 @@ function setup(client: ApiFootballClient | null = fakeClient(), leagues = [128])
     models.match as any,
     models.stats as any,
     models.run as any,
-    { leagues, season: 2026 },
+    { competitions, season: season ?? undefined },
     client,
   );
   return { service, models };
@@ -127,15 +131,19 @@ describe('IngestService', () => {
     expect(models.stats.docs).toHaveLength(3);
 
     const competition = models.competition.docs[0];
-    expect(competition.name).toBe('Liga Profesional Argentina');
-    expect(competition.externalIds.apiFootball).toBe(128);
-    expect(competition.currentRound).toBe('Regular Season - 10');
+    expect(competition.name).toBe('La Liga');
+    expect(competition.country).toBe('Spain');
+    expect(competition.externalIds.footballData).toBe(2014);
+    expect(competition.currentRound).toBe('Jornada 10');
 
-    const match = models.match.docs.find((m) => m.externalIds.apiFootball === 9001)!;
+    const match = models.match.docs.find((m) => m.externalIds.footballData === 9001)!;
     expect(match.status).toBe('finished');
     expect(match.score).toEqual({ home: 2, away: 0 });
-    expect(match.homeTeam).toEqual({ name: 'River Plate', code: 'RIV' });
-    expect(match.competitionName).toBe('Liga Profesional Argentina');
+    expect(match.homeTeam).toEqual({ name: 'Real Madrid CF', code: 'RMA' });
+    expect(match.competitionName).toBe('La Liga');
+
+    const barca = models.team.docs.find((t) => t.externalIds.footballData === 81)!;
+    expect(barca).toMatchObject({ name: 'FC Barcelona', shortName: 'Barça', code: 'FCB' });
   });
 
   it('calcula los promedios de liga con todos los equipos y la fuerza de cada uno', async () => {
@@ -143,16 +151,16 @@ describe('IngestService', () => {
     await service.runOnce();
 
     const competition = models.competition.docs[0];
-    // local: (12+8+7) goles en 18 partidos; visitante: (9+6+4) en 18
-    expect(competition.avgHomeGoals).toBeCloseTo(27 / 18, 10);
-    expect(competition.avgAwayGoals).toBeCloseTo(19 / 18, 10);
+    // local: (14+13+9) goles en 18 partidos; visitante: (10+11+6) en 18
+    expect(competition.avgHomeGoals).toBeCloseTo(36 / 18, 10);
+    expect(competition.avgAwayGoals).toBeCloseTo(27 / 18, 10);
 
-    const river = models.team.docs.find((t) => t.name === 'River Plate')!;
-    const stats = models.stats.docs.find((s) => String(s.teamId) === String(river._id))!;
+    const madrid = models.team.docs.find((t) => t.name === 'Real Madrid CF')!;
+    const stats = models.stats.docs.find((s) => String(s.teamId) === String(madrid._id))!;
     expect(stats.rank).toBe(1);
     expect(stats.form).toEqual(['W', 'W', 'D', 'W', 'W']);
-    expect(stats.home).toEqual({ played: 6, goalsFor: 12, goalsAgainst: 3 });
-    expect(stats.strength.attack).toBeGreaterThan(1); // River marca más que el promedio
+    expect(stats.home).toEqual({ played: 6, goalsFor: 14, goalsAgainst: 3 });
+    expect(stats.strength.attack).toBeGreaterThan(1); // el Madrid marca más que el promedio
     expect(stats.strength.defense).toBeLessThan(1); // y recibe menos
   });
 
@@ -165,11 +173,12 @@ describe('IngestService', () => {
     expect(run.status).toBe('success');
     expect(run.trigger).toBe('startup');
     expect(run.requests).toBe(2); // fixtures + standings
-    expect(run.requestsRemainingToday).toBe(90);
+    expect(run.requestsAvailableMinute).toBe(8);
+    expect(run.source).toBe('footballData');
     expect(run.finishedAt).toBeInstanceOf(Date);
     expect(run.errorMessages).toEqual([]);
     expect(run.leagues).toEqual([
-      { leagueId: 128, season: 2026, fixtures: 3, teams: 3, stats: 3 },
+      { competition: 'PD', season: 2026, fixtures: 3, teams: 3, stats: 3 },
     ]);
   });
 
@@ -179,18 +188,27 @@ describe('IngestService', () => {
     const competitionId = new Types.ObjectId();
     models.competition.docs.push({
       _id: competitionId,
-      name: 'Liga Profesional Argentina',
+      name: 'La Liga',
       season: 2026,
-      externalIds: { seed: 'liga-argentina' },
+      externalIds: { seed: 'la-liga' },
     });
-    const riverId = new Types.ObjectId();
-    models.team.docs.push({
-      _id: riverId,
-      name: 'River Plate',
-      code: 'RIV',
-      externalIds: { seed: 'river' },
-      competitionIds: [competitionId],
-    });
+    const madridId = new Types.ObjectId();
+    models.team.docs.push(
+      {
+        _id: madridId,
+        name: 'Real Madrid',
+        code: 'RMA',
+        externalIds: { seed: 'real-madrid' },
+        competitionIds: [competitionId],
+      },
+      {
+        _id: new Types.ObjectId(),
+        name: 'Barcelona',
+        code: 'BAR',
+        externalIds: { seed: 'barcelona' },
+        competitionIds: [competitionId],
+      },
+    );
     const seedMatch = {
       _id: new Types.ObjectId(),
       externalIds: { seed: 'm1' },
@@ -201,12 +219,17 @@ describe('IngestService', () => {
     await service.runOnce();
 
     expect(models.competition.docs).toHaveLength(1);
-    expect(models.competition.docs[0].externalIds).toEqual({ seed: 'liga-argentina', apiFootball: 128 });
-    expect(models.team.docs).toHaveLength(3); // River no se duplicó
-    const river = models.team.docs.find((t) => t.name === 'River Plate')!;
-    expect(String(river._id)).toBe(String(riverId));
-    expect(river.code).toBe('RIV');
-    expect(river.externalIds).toEqual({ seed: 'river', apiFootball: 435 });
+    expect(models.competition.docs[0].externalIds).toEqual({ seed: 'la-liga', footballData: 2014 });
+    expect(models.team.docs).toHaveLength(3); // Real Madrid y Barcelona no se duplicaron
+    const madrid = models.team.docs.find((t) => t.name === 'Real Madrid')!;
+    expect(String(madrid._id)).toBe(String(madridId));
+    expect(madrid.code).toBe('RMA');
+    expect(madrid.externalIds).toEqual({ seed: 'real-madrid', footballData: 86 });
+    const barca = models.team.docs.find((t) => t.name === 'Barcelona')!;
+    expect(barca.code).toBe('BAR'); // conserva el código del seed, no usa el tla "FCB"
+    expect(barca.externalIds).toEqual({ seed: 'barcelona', footballData: 81 });
+    const atleti = models.team.docs.find((t) => t.externalIds.footballData === 78)!;
+    expect(atleti).toMatchObject({ name: 'Club Atlético de Madrid', code: 'ATL' });
     expect(models.match.docs).toHaveLength(4); // 3 reales + el del seed intacto
     expect(models.match.docs[0].pickSummary).toEqual({ pick: 'HOME', hasValue: true });
   });
@@ -215,7 +238,7 @@ describe('IngestService', () => {
     const { service, models } = setup();
     await service.runOnce();
 
-    const match = models.match.docs.find((m) => m.externalIds.apiFootball === 9002)!;
+    const match = models.match.docs.find((m) => m.externalIds.footballData === 9002)!;
     match.pickSummary = { pick: 'HOME', hasValue: true, predictionId: 'p1' };
 
     await service.runOnce();
@@ -232,56 +255,75 @@ describe('IngestService', () => {
     const { service, models } = setup();
     await service.runOnce();
 
-    const updated = structuredClone(FIXTURES);
-    updated[1].fixture.status = { short: 'FT' };
-    updated[1].goals = { home: 3, away: 1 };
-    (service as any).client.getFixtures = async () => updated;
+    const updated = structuredClone(MATCHES);
+    updated.matches![1].status = 'FINISHED';
+    updated.matches![1].score = { fullTime: { home: 3, away: 1 } };
+    (service as any).client.getMatches = async () => updated;
 
     await service.runOnce();
 
-    const match = models.match.docs.find((m) => m.externalIds.apiFootball === 9002)!;
+    const match = models.match.docs.find((m) => m.externalIds.footballData === 9002)!;
     expect(match.status).toBe('finished');
     expect(match.score).toEqual({ home: 3, away: 1 });
   });
 
   it('si una liga falla sigue con las demás y la corrida queda partial', async () => {
     const client = fakeClient({
-      getFixtures: async (leagueId: number) => {
-        if (leagueId === 999) {
-          throw new ApiFootballError('/fixtures -> plan: Free plans do not have access to this season');
+      getMatches: async (code: string) => {
+        if (code === 'ASL') {
+          throw new FootballDataError(
+            'HTTP 403 en /competitions/ASL/matches: restricted to the plan TIER_TWO',
+          );
         }
-        return FIXTURES;
+        return MATCHES;
       },
     });
-    const { service, models } = setup(client, [999, 128]);
+    const { service, models } = setup(client, ['ASL', 'PD']);
 
     const result = await service.runOnce();
 
     expect(result?.status).toBe('partial');
-    expect(result?.errors[0]).toContain('liga 999');
-    expect(result?.errors[0]).toContain('Free plans do not have access');
-    expect(models.match.docs).toHaveLength(3); // la liga 128 sí se ingestó
+    expect(result?.errors[0]).toContain('competición ASL');
+    expect(result?.errors[0]).toContain('restricted to the plan');
+    expect(models.match.docs).toHaveLength(3); // la liga PD sí se ingestó
     expect(models.run.docs[0].status).toBe('partial');
   });
 
   it('si todas las ligas fallan la corrida queda failed', async () => {
     const client = fakeClient({
-      getFixtures: async () => {
-        throw new ApiFootballError('HTTP 500');
+      getMatches: async () => {
+        throw new FootballDataError('HTTP 500');
       },
     });
-    const { service } = setup(client, [128, 140]);
+    const { service } = setup(client, ['PD', 'PL']);
 
     expect((await service.runOnce())?.status).toBe('failed');
   });
 
   it('una temporada sin partidos se informa como error de esa liga', async () => {
-    const { service } = setup(fakeClient({ getFixtures: async () => [] }));
+    const { service } = setup(fakeClient({ getMatches: async () => ({ matches: [] }) }));
 
     const result = await service.runOnce();
 
     expect(result?.status).toBe('failed');
     expect(result?.errors[0]).toContain('no devolvió partidos');
+  });
+
+  it('sin temporada configurada pide la actual y registra la que devuelve la API', async () => {
+    const calls: [string, number | undefined][] = [];
+    const client = fakeClient({
+      getMatches: async (code: string, season?: number) => {
+        calls.push([code, season]);
+        return MATCHES;
+      },
+    });
+    const { service, models } = setup(client, ['PD'], null);
+
+    await service.runOnce();
+
+    expect(calls).toEqual([['PD', undefined]]);
+    expect(models.competition.docs[0].season).toBe(2026);
+    expect(models.run.docs[0].leagues[0].season).toBe(2026);
   });
 
   it('sin API key no hace nada ni escribe en la base', async () => {

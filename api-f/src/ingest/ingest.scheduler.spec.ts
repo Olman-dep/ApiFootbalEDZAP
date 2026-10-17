@@ -16,7 +16,7 @@ describe('IngestScheduler', () => {
 
     scheduler.onApplicationBootstrap();
 
-    expect(registry.doesExist('cron', 'api-football-ingest')).toBe(false);
+    expect(registry.doesExist('cron', 'football-data-ingest')).toBe(false);
     expect(runOnce).not.toHaveBeenCalled();
   });
 
@@ -27,11 +27,11 @@ describe('IngestScheduler', () => {
     });
 
     scheduler.onApplicationBootstrap();
-    expect(registry.doesExist('cron', 'api-football-ingest')).toBe(true);
+    expect(registry.doesExist('cron', 'football-data-ingest')).toBe(true);
     expect(runOnce).not.toHaveBeenCalled();
 
     scheduler.onModuleDestroy();
-    expect(registry.doesExist('cron', 'api-football-ingest')).toBe(false);
+    expect(registry.doesExist('cron', 'football-data-ingest')).toBe(false);
   });
 
   it('con INGEST_ON_START=true corre una vez al arrancar', () => {

@@ -26,7 +26,7 @@ export const MatchDataProviderFactory: Provider = {
       case 'mock':
         return new MockProvider();
       default:
-        // api_football / scraping providers are not implemented yet; fall back
+        // scraping provider is not implemented yet; fall back
         // to mock so the credential-free path always works.
         return new MockProvider();
     }

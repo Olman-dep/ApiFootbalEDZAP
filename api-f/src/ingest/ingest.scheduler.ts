@@ -4,8 +4,9 @@ import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
 import { IngestService } from './ingest.service.js';
 
-const JOB_NAME = 'api-football-ingest';
-// Cada 6 horas: 4 corridas/día x (2 peticiones por liga) cabe de sobra en las 100/día del plan gratis.
+const JOB_NAME = 'football-data-ingest';
+// Cada 6 horas. El plan gratis permite 10 peticiones por minuto (sin tope diario) y cada
+// competición gasta 2 por corrida; los marcadores del plan gratis llegan con retraso.
 const DEFAULT_CRON = '0 */6 * * *';
 
 @Injectable()

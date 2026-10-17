@@ -28,4 +28,5 @@ export type TeamDocument = HydratedDocument<Team>;
 export const TeamSchema = SchemaFactory.createForClass(Team);
 
 TeamSchema.index({ 'externalIds.apiFootball': 1 }, { unique: true, sparse: true });
+TeamSchema.index({ 'externalIds.footballData': 1 }, { unique: true, sparse: true });
 TeamSchema.index({ code: 1 });

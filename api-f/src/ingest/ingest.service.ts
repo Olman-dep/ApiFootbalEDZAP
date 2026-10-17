@@ -10,27 +10,31 @@ import {
   computeLeagueAverages,
   computeStrength,
 } from '../ml/team-strength.js';
-import type { ApiFootballClient } from './api-football.client.js';
+import type { FootballDataClient } from './football-data.client.js';
 import {
+  competitionAliases,
   currentRound,
-  mapFixture,
+  isSameTeam,
+  mapMatches,
   mapStandings,
   normalizeName,
   teamCode,
   uniqueTeams,
-} from './api-football.mappers.js';
+} from './football-data.mappers.js';
 import type {
   MappedFixture,
   MappedStanding,
   MappedTeam,
-} from './api-football.mappers.js';
+} from './football-data.mappers.js';
 
 export const INGEST_CONFIG = 'INGEST_CONFIG';
-export const API_FOOTBALL_CLIENT = 'API_FOOTBALL_CLIENT';
+export const FOOTBALL_DATA_CLIENT = 'FOOTBALL_DATA_CLIENT';
 
 export interface IngestConfig {
-  leagues: number[];
-  season: number;
+  /** Códigos de competición de football-data.org, p. ej. ['PD', 'PL']. */
+  competitions: string[];
+  /** Año en que empieza la temporada; sin valor se usa la temporada actual de la API. */
+  season?: number;
 }
 
 export type IngestTrigger = 'cron' | 'startup';
@@ -39,8 +43,8 @@ type WithId = { _id: Types.ObjectId };
 type TeamRef = { _id: Types.ObjectId; name: string; code: string };
 
 interface LeagueOutcome {
-  leagueId: number;
-  season: number;
+  competition: string;
+  season?: number;
   fixtures: number;
   teams: number;
   stats: number;
@@ -59,7 +63,7 @@ export class IngestService {
     @InjectModel(TeamSeasonStats.name) private readonly statsModel: Model<TeamSeasonStats>,
     @InjectModel(IngestRun.name) private readonly runModel: Model<IngestRun>,
     @Inject(INGEST_CONFIG) private readonly config: IngestConfig,
-    @Inject(API_FOOTBALL_CLIENT) private readonly client: ApiFootballClient | null,
+    @Inject(FOOTBALL_DATA_CLIENT) private readonly client: FootballDataClient | null,
   ) {}
 
   /** Una corrida completa. Devuelve null si ya hay otra en curso o falta la API key. */
@@ -69,22 +73,22 @@ export class IngestService {
       return null;
     }
     if (!this.client) {
-      this.logger.error('Falta API_FOOTBALL_KEY en el .env; no se puede ingestar.');
+      this.logger.error('Falta FOOTBALL_DATA_API_KEY en el .env; no se puede ingestar.');
       return null;
     }
 
     this.running = true;
     const client = this.client;
     const requestsBefore = client.requestCount;
-    const run = await this.runModel.create({ source: 'apiFootball', trigger });
+    const run = await this.runModel.create({ source: 'footballData', trigger });
     const leagues: LeagueOutcome[] = [];
     const errors: string[] = [];
 
     try {
-      for (const leagueId of this.config.leagues) {
-        const outcome = await this.ingestLeague(client, leagueId, this.config.season);
+      for (const code of this.config.competitions) {
+        const outcome = await this.ingestLeague(client, code, this.config.season);
         leagues.push(outcome);
-        if (outcome.error) errors.push(`liga ${leagueId}: ${outcome.error}`);
+        if (outcome.error) errors.push(`competición ${code}: ${outcome.error}`);
       }
     } finally {
       this.running = false;
@@ -100,7 +104,7 @@ export class IngestService {
           status,
           finishedAt: new Date(),
           requests: client.requestCount - requestsBefore,
-          requestsRemainingToday: client.requestsRemainingToday,
+          requestsAvailableMinute: client.requestsAvailableMinute,
           leagues,
           errorMessages: errors,
         },
@@ -114,32 +118,39 @@ export class IngestService {
   }
 
   private async ingestLeague(
-    client: ApiFootballClient,
-    leagueId: number,
-    season: number,
+    client: FootballDataClient,
+    code: string,
+    configuredSeason: number | undefined,
   ): Promise<LeagueOutcome> {
-    const outcome: LeagueOutcome = { leagueId, season, fixtures: 0, teams: 0, stats: 0 };
+    const outcome: LeagueOutcome = {
+      competition: code,
+      season: configuredSeason,
+      fixtures: 0,
+      teams: 0,
+      stats: 0,
+    };
 
     try {
-      const fixtures = (await client.getFixtures(leagueId, season))
-        .map(mapFixture)
-        .filter((f): f is MappedFixture => f !== null);
+      const fixtures = mapMatches(await client.getMatches(code, configuredSeason));
 
       if (fixtures.length === 0) {
-        outcome.error = `la API no devolvió partidos para la temporada ${season}`;
+        outcome.error = `la API no devolvió partidos${configuredSeason ? ` para la temporada ${configuredSeason}` : ''}`;
         return outcome;
       }
+
+      const season = fixtures[0].season;
+      outcome.season = season;
 
       const competitionId = await this.upsertCompetition(fixtures);
       const teams = await this.upsertTeams(uniqueTeams(fixtures), competitionId);
       outcome.teams = teams.size;
       outcome.fixtures = await this.upsertMatches(fixtures, competitionId, teams);
 
-      const standings = mapStandings(await client.getStandings(leagueId, season));
+      const standings = mapStandings(await client.getStandings(code, season));
       outcome.stats = await this.upsertStats(standings, competitionId, season, teams);
     } catch (error) {
       outcome.error = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Liga ${leagueId}: ${outcome.error}`);
+      this.logger.error(`Competición ${code}: ${outcome.error}`);
     }
 
     return outcome;
@@ -150,15 +161,15 @@ export class IngestService {
     const first = fixtures[0];
 
     let existing = await this.competitionModel
-      .findOne({ 'externalIds.apiFootball': first.leagueId, season: first.season })
+      .findOne({ 'externalIds.footballData': first.leagueId, season: first.season })
       .lean<WithId | null>();
 
     if (!existing) {
+      const aliases = competitionAliases(first.competitionCode, first.leagueName);
       const sameSeason = await this.competitionModel
         .find({ season: first.season })
         .lean<(WithId & { name: string })[]>();
-      existing =
-        sameSeason.find((c) => normalizeName(c.name) === normalizeName(first.leagueName)) ?? null;
+      existing = sameSeason.find((c) => aliases.has(normalizeName(c.name))) ?? null;
     }
 
     const fields = {
@@ -166,7 +177,7 @@ export class IngestService {
       country: first.country,
       logoUrl: first.logo,
       currentRound: currentRound(fixtures),
-      'externalIds.apiFootball': first.leagueId,
+      'externalIds.footballData': first.leagueId,
     };
 
     if (existing) {
@@ -180,7 +191,7 @@ export class IngestService {
       logoUrl: first.logo,
       season: first.season,
       currentRound: currentRound(fixtures),
-      externalIds: { apiFootball: first.leagueId },
+      externalIds: { footballData: first.leagueId },
     });
     return (created as unknown as WithId)._id;
   }
@@ -198,12 +209,12 @@ export class IngestService {
 
     for (const team of teams) {
       let doc =
-        known.find((t) => t.externalIds?.apiFootball === team.externalId) ??
-        known.find((t) => normalizeName(t.name) === normalizeName(team.name));
+        known.find((t) => t.externalIds?.footballData === team.externalId) ??
+        known.find((t) => isSameTeam(t.name, team));
 
       if (!doc) {
         const byExternalId = await this.teamModel
-          .findOne({ 'externalIds.apiFootball': team.externalId })
+          .findOne({ 'externalIds.footballData': team.externalId })
           .lean<(WithId & { name: string; code: string }) | null>();
         doc = byExternalId ?? undefined;
       }
@@ -212,19 +223,19 @@ export class IngestService {
         await this.teamModel.updateOne(
           { _id: doc._id },
           {
-            $set: { 'externalIds.apiFootball': team.externalId, ...(team.logo && { crestUrl: team.logo }) },
+            $set: { 'externalIds.footballData': team.externalId, ...(team.logo && { crestUrl: team.logo }) },
             $addToSet: { competitionIds: competitionId },
           },
         );
         result.set(team.externalId, { _id: doc._id, name: doc.name, code: doc.code });
       } else {
-        const code = teamCode(team.name);
+        const code = team.tla ?? teamCode(team.name);
         const created = await this.teamModel.create({
           name: team.name,
-          shortName: team.name,
+          shortName: team.shortName ?? team.name,
           code,
           crestUrl: team.logo,
-          externalIds: { apiFootball: team.externalId },
+          externalIds: { footballData: team.externalId },
           competitionIds: [competitionId],
         });
         result.set(team.externalId, {
@@ -238,7 +249,7 @@ export class IngestService {
     return result;
   }
 
-  // --- Partidos: upsert por externalIds.apiFootball. No toca pickSummary. ---
+  // --- Partidos: upsert por externalIds.footballData. No toca pickSummary. ---
   private async upsertMatches(
     fixtures: MappedFixture[],
     competitionId: Types.ObjectId,
@@ -252,7 +263,7 @@ export class IngestService {
       return [
         {
           updateOne: {
-            filter: { 'externalIds.apiFootball': f.externalId },
+            filter: { 'externalIds.footballData': f.externalId },
             update: {
               $set: {
                 competitionId,

@@ -10,23 +10,32 @@ import {
   TeamSeasonStats,
   TeamSeasonStatsSchema,
 } from '../infrastructure/database/schemas/team-season-stats.schema.js';
-import { ApiFootballClient } from './api-football.client.js';
+import { FootballDataClient } from './football-data.client.js';
 import { IngestScheduler } from './ingest.scheduler.js';
 import {
-  API_FOOTBALL_CLIENT,
+  FOOTBALL_DATA_CLIENT,
   INGEST_CONFIG,
   IngestService,
 } from './ingest.service.js';
 import type { IngestConfig } from './ingest.service.js';
 
-// IDs de API-Football: 128 = Liga Profesional Argentina, 140 = La Liga.
-const DEFAULT_LEAGUES = '128,140';
+// Códigos de football-data.org (plan gratis): PD = La Liga, PL = Premier League,
+// BL1 = Bundesliga, SA = Serie A, FL1 = Ligue 1, DED = Eredivisie, PPL = Primeira Liga,
+// ELC = Championship, BSA = Brasileirão, CL = Champions League.
+const DEFAULT_COMPETITIONS = 'PD';
 
-export function parseLeagues(value: string | undefined): number[] {
-  return (value ?? DEFAULT_LEAGUES)
+export function parseCompetitions(value: string | undefined): string[] {
+  const codes = (value || DEFAULT_COMPETITIONS)
     .split(',')
-    .map((id) => Number(id.trim()))
-    .filter((id) => Number.isInteger(id) && id > 0);
+    .map((code) => code.trim().toUpperCase())
+    .filter((code) => /^[A-Z0-9]{2,4}$/.test(code));
+  return [...new Set(codes)];
+}
+
+/** Vacío o inválido = temporada actual de la API. */
+export function parseSeason(value: string | undefined): number | undefined {
+  const season = Number(value);
+  return Number.isInteger(season) && season >= 2000 ? season : undefined;
 }
 
 @Module({})
@@ -55,16 +64,16 @@ export class IngestModule {
         {
           provide: INGEST_CONFIG,
           useFactory: (config: ConfigService): IngestConfig => ({
-            leagues: parseLeagues(config.get<string>('API_FOOTBALL_LEAGUES')),
-            season: Number(config.get<string>('API_FOOTBALL_SEASON') ?? new Date().getFullYear()),
+            competitions: parseCompetitions(config.get<string>('FOOTBALL_DATA_COMPETITIONS')),
+            season: parseSeason(config.get<string>('FOOTBALL_DATA_SEASON')),
           }),
           inject: [ConfigService],
         },
         {
-          provide: API_FOOTBALL_CLIENT,
+          provide: FOOTBALL_DATA_CLIENT,
           useFactory: (config: ConfigService) => {
-            const key = config.get<string>('API_FOOTBALL_KEY');
-            return key ? new ApiFootballClient(key) : null;
+            const key = config.get<string>('FOOTBALL_DATA_API_KEY');
+            return key ? new FootballDataClient(key) : null;
           },
           inject: [ConfigService],
         },

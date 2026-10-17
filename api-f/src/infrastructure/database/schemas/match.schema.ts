@@ -50,6 +50,7 @@ export type MatchDocument = HydratedDocument<Match>;
 export const MatchSchema = SchemaFactory.createForClass(Match);
 
 MatchSchema.index({ 'externalIds.apiFootball': 1 }, { unique: true, sparse: true });
+MatchSchema.index({ 'externalIds.footballData': 1 }, { unique: true, sparse: true });
 MatchSchema.index({ competitionId: 1, kickoff: 1 });            // Monthly Matches
 MatchSchema.index({ status: 1, kickoff: 1 });                   // Upcoming / today
 MatchSchema.index({ 'pickSummary.hasValue': 1, kickoff: 1 });   // High edge

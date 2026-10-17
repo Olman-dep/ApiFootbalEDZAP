@@ -21,4 +21,9 @@ export type CompetitionDocument = HydratedDocument<Competition>;
 export const CompetitionSchema = SchemaFactory.createForClass(Competition);
 
 CompetitionSchema.index({ 'externalIds.apiFootball': 1 }, { unique: true, sparse: true });
+// Una competición por temporada: el mismo id externo se repite en cada temporada.
+CompetitionSchema.index(
+  { 'externalIds.footballData': 1, season: 1 },
+  { unique: true, partialFilterExpression: { 'externalIds.footballData': { $exists: true } } },
+);
 CompetitionSchema.index({ name: 1, season: 1 });
