@@ -1,6 +1,6 @@
-
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { TerminusModule } from '@nestjs/terminus';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { MatchesModule } from './modules/matches/matches.module.js';
@@ -11,6 +11,7 @@ import { DatabaseModule } from './infrastructure/database/database.module.js';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule.forRoot(),
+    TerminusModule,
     MatchesModule,
     PredictionsModule,
   ],
