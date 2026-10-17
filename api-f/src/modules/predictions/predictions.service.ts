@@ -1,37 +1,43 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PoissonService } from '../../ml/poisson.service.js';
 import { MatchesService } from '../matches/matches.service.js';
-import { TEAM_AVG_GOALS } from '../../infrastructure/mock/mock-data.js';
+import { TEAM_STATS_PROVIDER } from '../../infrastructure/team-stats.provider.js';
+import type { TeamStatsProvider } from '../../infrastructure/providers/team-stats-provider.interface.js';
+
+// Goles esperados por equipo cuando no hay estadísticas disponibles.
+const DEFAULT_EXPECTED_GOALS = 1.2;
 
 @Injectable()
 export class PredictionsService {
   constructor(
     private readonly matchesService: MatchesService,
     private readonly poissonService: PoissonService,
+    @Inject(TEAM_STATS_PROVIDER)
+    private readonly teamStatsProvider: TeamStatsProvider,
   ) {}
 
   async getPredictionForMatch(matchId: string) {
-    const matches = await this.matchesService.getTodayMatches();
-    const match = matches.find((m) => m.id === matchId);
+    // Lanza NotFoundException si el partido no existe.
+    const match = await this.matchesService.getMatchById(matchId);
 
-    if (!match) {
-      throw new NotFoundException(`No se encontró el partido ${matchId}`);
-    }
-
-    const homeAvgGoals = TEAM_AVG_GOALS[match.homeTeam] ?? 1.2;
-    const awayAvgGoals = TEAM_AVG_GOALS[match.awayTeam] ?? 1.2;
+    const fromStats = await this.teamStatsProvider.getExpectedGoals(match);
+    const expectedGoals = {
+      home: fromStats?.home ?? DEFAULT_EXPECTED_GOALS,
+      away: fromStats?.away ?? DEFAULT_EXPECTED_GOALS,
+      source: fromStats ? ('team_stats' as const) : ('default' as const),
+    };
 
     const probabilities = this.poissonService.calculateMatchProbabilities(
-      homeAvgGoals,
-      awayAvgGoals,
+      expectedGoals.home,
+      expectedGoals.away,
     );
 
     const overUnder25 = this.poissonService.calculateOverUnder(
-      homeAvgGoals,
-      awayAvgGoals,
+      expectedGoals.home,
+      expectedGoals.away,
       2.5,
     );
 
-    return { match, probabilities, overUnder25 };
+    return { match, expectedGoals, probabilities, overUnder25 };
   }
 }
