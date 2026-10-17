@@ -9,7 +9,7 @@ export interface MatchDto {
   season: number;
   round: string;
   kickoff: string;
-  status: 'scheduled' | 'live' | 'finished';
+  status: 'scheduled' | 'live' | 'finished' | 'postponed' | 'cancelled';
   score: { home: number | null; away: number | null };
   pickSummary: {
     pick: string;

@@ -33,6 +33,7 @@ const PickSummarySchema = SchemaFactory.createForClass(PickSummary);
 export class Match {
   @Prop({ type: Object, default: {} }) externalIds: Record<string, number>;
   @Prop({ type: Types.ObjectId, ref: 'Competition', required: true }) competitionId: Types.ObjectId;
+  @Prop({ required: true }) competitionName: string; // desnormalizado
   @Prop({ required: true }) season: number;
   @Prop() round: string;
   @Prop({ required: true }) kickoff: Date;
