@@ -44,7 +44,14 @@ export class PoissonService {
       }
     }
 
-    return { homeWin, draw, awayWin };
+    // La matriz se corta en MAX_GOALS, así que la suma queda un poco por
+    // debajo de 1; se normaliza para que las probabilidades sumen exactamente 1.
+    const total = homeWin + draw + awayWin;
+    return {
+      homeWin: homeWin / total,
+      draw: draw / total,
+      awayWin: awayWin / total,
+    };
   }
 
   calculateOverUnder(homeAvgGoals: number, awayAvgGoals: number, line: number) {

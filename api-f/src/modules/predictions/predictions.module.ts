@@ -4,10 +4,16 @@ import { PredictionsService } from './predictions.service.js';
 import { PoissonService } from '../../ml/poisson.service.js';
 import { MatchesModule } from '../matches/matches.module.js';
 import { TeamStatsProviderFactory } from '../../infrastructure/team-stats.provider.js';
+import { PredictionStoreFactory } from '../../infrastructure/prediction-store.provider.js';
 
 @Module({
   imports: [MatchesModule],
   controllers: [PredictionsController],
-  providers: [PredictionsService, PoissonService, TeamStatsProviderFactory],
+  providers: [
+    PredictionsService,
+    PoissonService,
+    TeamStatsProviderFactory,
+    PredictionStoreFactory,
+  ],
 })
 export class PredictionsModule {}
