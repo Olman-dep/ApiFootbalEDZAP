@@ -20,7 +20,8 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
-    "seed": "node --env-file=.env scripts/seed-data.mjs"
+    "seed": "node --env-file=.env scripts/seed-data.mjs && node --env-file=.env scripts/seed-team-stats.mjs",
+    "seed:stats": "node --env-file=.env scripts/seed-team-stats.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
