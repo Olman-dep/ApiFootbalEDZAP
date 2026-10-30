@@ -1,31 +1,20 @@
 import { NestFactory } from '@nestjs/core';
-import { ConfigService } from '@nestjs/config';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Configuración de Swagger
-  const config = new DocumentBuilder()
-    .setTitle('API Football EDZAP')
-    .setDescription('Documentación de la API de fútbol')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+    }),
+  );
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-
-  const configService = app.get(ConfigService);
-  const port = configService.get<string>('PORT') ?? 3000;
-
+  const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  console.log(`Servidor en: http://localhost:${port}`);
-  console.log(`Swagger en: http://localhost:${port}/api/docs`);
+  console.log(`API corriendo en http://localhost:${port}`);
 }
 
-void bootstrap().catch((error: unknown) => {
-  console.error('Error al iniciar la aplicación:', error);
-  process.exitCode = 1;
-});
+bootstrap();

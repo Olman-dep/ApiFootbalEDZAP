@@ -1,21 +1,23 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
 import { TerminusModule } from '@nestjs/terminus';
+
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { MatchesModule } from './modules/matches/matches.module.js';
-import { PredictionsModule } from './modules/predictions/predictions.module.js';
-import { DatabaseModule } from './infrastructure/database/database.module.js';
-import { IngestModule } from './ingest/ingest.module.js';
+import { UserModule } from './infrastructure/module/user.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    DatabaseModule.forRoot(),
-    IngestModule.forRoot(),
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        uri: config.getOrThrow<string>('MONGO_URI'),
+      }),
+    }),
     TerminusModule,
-    MatchesModule,
-    PredictionsModule,
+    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
